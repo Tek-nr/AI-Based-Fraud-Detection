@@ -1,8 +1,10 @@
+import numpy as np
 import pandas as pd
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.metrics import Precision, Recall, AUC
+from sklearn.metrics import precision_score, recall_score, f1_score, roc_auc_score
 from keras.models import Sequential
 from tensorflow.keras.models import Model, Sequential
 from tensorflow.keras.layers import Activation, Input, Dense, LSTM
@@ -37,7 +39,9 @@ def y_pred_for_DLModels(model, X_test):
 def evaluate_model(model, X_test_, y_test):
     test_loss, precision, recall, auc = model.evaluate(X_test_, y_test)
     f1 = 2 * (precision * recall) / (precision + recall)
-    print(' F1 Score:', f1)
+    print("*************************************************")
+    print('F1 Score:', f1)
+    print("*************************************************")
     return precision, recall, f1, auc
 
 
@@ -100,6 +104,44 @@ def CNN_model(X_train_scaled, X_test_scaled, y_train, y_test):
     return row
 
 ##############################################################
+
+def autoencoders(X_train_scaled, X_test_scaled, y_train, y_test):
+    
+    # Define the dimensions of the input data
+    input_dim = X_train_scaled.shape[1]
+
+    # Define the Autoencoder architecture
+    input_layer = Input(shape=(input_dim,))
+    encoder = Dense(32, activation='relu')(input_layer)
+    decoder = Dense(input_dim, activation='sigmoid')(encoder)
+
+    # Create the Autoencoder model
+    autoencoder = Model(inputs=input_layer, outputs=decoder)
+
+    # Compile the model
+    autoencoder.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+
+    # Train the model
+    autoencoder.fit(X_train_scaled, X_train_scaled, epochs=10, batch_size=64, validation_data=(X_test_scaled, X_test_scaled))
+
+    # Use the trained Autoencoder for anomaly detection
+    reconstructed_data = autoencoder.predict(X_test_scaled)
+    mse = np.mean(np.power(X_test_scaled - reconstructed_data, 2), axis=1)
+    threshold = np.mean(mse) + np.std(mse)  # Define a threshold for anomaly detection
+
+    # Classify instances as fraudulent or non-fraudulent based on the threshold
+    y_pred = [1 if error > threshold else 0 for error in mse]
+    
+    # Calculate evaluation metrics
+    precision = precision_score(y_test, y_pred)
+    recall = recall_score(y_test, y_pred)
+    f1 = 2 * (precision * recall) / (precision + recall)
+    auc = roc_auc_score(y_test, mse)
+    
+    row = "Autoencoder", precision, recall, f1, auc
+        
+    return row
+
 """
 def autoencoders(X_train_scaled, X_test_scaled, y_train, y_test):
     input_dim = X_train_scaled.shape[1]
@@ -114,7 +156,7 @@ def autoencoders(X_train_scaled, X_test_scaled, y_train, y_test):
     
     validation_data=(X_test_scaled, X_test_scaled)
     
-    fit_model(model, X_train_reshaped, y_train, validation_data)
+    fit_model(model, X_train_scaled, y_train, validation_data)
     
     # Obtain the reconstructed outputs
     reconstructed_X_test = autoencoder.predict(X_test_scaled)
@@ -128,11 +170,12 @@ def autoencoders(X_train_scaled, X_test_scaled, y_train, y_test):
     # Classify samples as normal or fraud based on the threshold
     y_pred = np.where(mse > threshold, 1, 0)
     
-    #precision, recall, f1, auc = evaluate_model(model, X_test_reshaped, y_test)
-    #row = "CNN_test2", precision, recall, f1, auc
+    precision, recall, f1, auc = evaluate_model(model, X_test_scaled, y_test)
+    row = "Autoencoder", precision, recall, f1, auc
         
-    #return row
-"""    
+    return row
+ """  
+
 ##############################################################
     
 def RNN_model(X_train_scaled, X_test_scaled, y_train, y_test):
